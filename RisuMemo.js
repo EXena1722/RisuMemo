@@ -1,7 +1,7 @@
 //@name Notepad
-//@display-name 📝 RisuMemo v4.0.1
+//@display-name 📝 RisuMemo v4.0.2
 //@api 3.0
-//@version 4.0.1
+//@version 4.0.2
 //@update-url https://raw.githubusercontent.com/EXena1722/RisuMemo/main/RisuMemo.js
 //@link https://github.com/EXena1722/RisuMemo GitHub
 //@arg risumemo_ui_reset string 창·버튼 위치가 꼬였을 때 reset 입력 후 새로고침
@@ -9,7 +9,7 @@
 (async () => {
 try {
 
-const PLUGIN_NAME = "[RisuMemo v4.0.1]";
+const PLUGIN_NAME = "[RisuMemo v4.0.2]";
 const NOTEPAD_UI_ID = "risu-notepad-container";
 const NOTEPAD_STYLE_ID = "risu-notepad-style";
 const FLOAT_ATTR = "x-risumemo-float";
@@ -605,15 +605,32 @@ function applyWindowLayout() {
     });
 }
 
-// Chrome 계열에서 한 번 숨겼다 다시 표시한 플러그인 iframe이 화면을 새로 그리지 않아
-// 창이 안 보이는(배경만 어두운) 경우가 있다. 크기가 바뀌면 그제야 그려진다.
-// 연 직후 몇 번 창의 투명도를 살짝 바꿔 다시 그리게 한다 (display를 건드리면 입력 포커스가 풀리므로 쓰지 않는다).
-function forceRepaint() {
-    const el = document.getElementById(NOTEPAD_UI_ID);
-    if (!el || !isWindowVisible) return;
-    el.style.opacity = "0.999";
-    void el.offsetHeight;
-    setTimeout(() => { el.style.opacity = ""; }, 30);
+// Chrome 계열에서 한 번 숨겼다(display:none) 다시 표시한 플러그인 iframe은 렌더링이 멈춘 채로 남아
+// 창이 안 보이고 배경만 어두운 경우가 있다. iframe 안에서 무엇을 바꿔도 다시 그려지지 않고,
+// iframe 크기가 실제로 바뀌어야 렌더링이 재개된다.
+// 그래서 메인 화면에서 이 플러그인의 iframe을 찾아 높이를 1px 줄였다 되돌린다 (메인 화면 권한 필요).
+let ownIframe = null;
+async function findOwnIframe() {
+    // 전체화면으로 표시 중인 플러그인 iframe: showContainer('fullscreen')이 인라인으로 지정하는 스타일로 찾는다
+    const frames = await risuai.unwarpSafeArray(await rootDoc.querySelectorAll("iframe"));
+    for (const f of frames) {
+        if (await f.getStyle("display") === "block" && await f.getStyle("position") === "fixed" && await f.getStyle("zIndex") === "1000") return f;
+    }
+    return null;
+}
+
+async function wakeOwnIframe() {
+    if (!rootDoc) return;
+    try {
+        if (!ownIframe || await ownIframe.getStyle("display") !== "block") ownIframe = await findOwnIframe();
+        if (!ownIframe) return;
+        await ownIframe.setStyle("height", "calc(100% - 1px)");
+        await new Promise(r => setTimeout(r, 100));
+        await ownIframe.setStyle("height", "100%");
+    } catch (e) {
+        ownIframe = null;
+        console.error(`${PLUGIN_NAME} iframe 다시 그리기 실패:`, e);
+    }
 }
 
 // resize 이벤트가 늦거나 오지 않는 환경 대비: 연 직후 2초 동안 화면 크기가 바뀌는지 확인해 다시 계산한다
@@ -628,13 +645,16 @@ function watchViewportAfterOpen() {
 
 async function openNotepadWindow() {
     if (isWindowVisible) return;
+    // 메인 화면 권한은 iframe을 띄우기 전에 요청한다. 띄운 뒤에 요청하면 RisuAI의 확인 창이 iframe에 가려질 수 있다.
+    // (거부하면 같은 세션에서는 다시 묻지 않고 바로 null이 돌아온다)
+    await ensureRootDocument();
     isWindowVisible = true;
     document.getElementById(NOTEPAD_UI_ID)?.classList.remove("hidden");
     await risuai.showContainer("fullscreen");
+    wakeOwnIframe();
     // 이후 화면 크기가 실제 값으로 바뀌면 resize 이벤트에서 다시 계산된다
     applyWindowLayout();
     watchViewportAfterOpen();
-    for (const delay of [0, 100, 400]) setTimeout(forceRepaint, delay);
     setTimeout(focusActiveTab, 50);
     if (pendingToasts.length) showToast(pendingToasts.splice(0).join("\n"));
     if (pendingLegacyRestore) { pendingLegacyRestore = false; await offerLegacyBackupRestore(); }
@@ -1831,6 +1851,6 @@ async function initNotepad() {
 await initNotepad();
 
 } catch (error) {
-    console.error(`[RisuMemo v4.0.1] 플러그인 초기화 오류:`, error);
+    console.error(`[RisuMemo v4.0.2] 플러그인 초기화 오류:`, error);
 }
 })();
