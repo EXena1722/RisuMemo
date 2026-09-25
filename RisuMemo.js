@@ -1,7 +1,7 @@
 //@name Notepad
-//@display-name 📝 RisuMemo v4.0.0
+//@display-name 📝 RisuMemo v4.0.1
 //@api 3.0
-//@version 4.0.0
+//@version 4.0.1
 //@update-url https://raw.githubusercontent.com/EXena1722/RisuMemo/main/RisuMemo.js
 //@link https://github.com/EXena1722/RisuMemo GitHub
 //@arg risumemo_ui_reset string 창·버튼 위치가 꼬였을 때 reset 입력 후 새로고침
@@ -9,7 +9,7 @@
 (async () => {
 try {
 
-const PLUGIN_NAME = "[RisuMemo v4.0.0]";
+const PLUGIN_NAME = "[RisuMemo v4.0.1]";
 const NOTEPAD_UI_ID = "risu-notepad-container";
 const NOTEPAD_STYLE_ID = "risu-notepad-style";
 const FLOAT_ATTR = "x-risumemo-float";
@@ -246,12 +246,12 @@ function injectStyles() {
         /* 전체화면 iframe이 열려 있는 동안 뒤쪽 RisuAI는 조작할 수 없으므로 살짝 어둡게 표시한다. 바깥 클릭 시 닫힘. */
         html, body { background: rgba(0, 0, 0, 0.2); overflow: hidden; width: 100%; height: 100%; }
         body.tab-dragging-active, body.notepad-resizing { user-select: none; }
-        body.notepad-resizing #${NOTEPAD_UI_ID} { backdrop-filter: none !important; box-shadow: none !important; transition: none !important; }
+        body.notepad-resizing #${NOTEPAD_UI_ID} { box-shadow: none !important; transition: none !important; }
         #${NOTEPAD_UI_ID} {
             position: fixed;
             top: var(--rm-top, 120px); right: var(--rm-right, 20px);
             width: var(--rm-width, 450px); height: var(--rm-height, 600px);
-            background: var(--rm-bg-main); backdrop-filter: blur(10px); border-radius: 12px;
+            background: var(--rm-bg-main); border-radius: 12px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.5); z-index: 99999; display: flex; flex-direction: column;
             overflow: hidden; border: 1px solid var(--rm-border);
             font-family: 'Noto Sans KR', sans-serif; min-width: ${MIN_WIDTH}px; min-height: ${MIN_HEIGHT}px;
@@ -322,7 +322,7 @@ function injectStyles() {
         }
         .notepad-tab-dropdown-menu, .notepad-context-menu, .notepad-folder-settings-menu, .notepad-backup-menu, .notepad-theme-menu {
             position: absolute; z-index: 100002;
-            background: var(--rm-menu-bg); backdrop-filter: blur(10px);
+            background: var(--rm-menu-bg);
             border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
             border: 1px solid var(--rm-border); padding: 4px; min-width: 120px;
         }
@@ -372,7 +372,7 @@ function injectStyles() {
         .notepad-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--rm-accent); color: white; padding: 12px 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 100010; animation: slideDown 0.3s ease; max-width: calc(100vw - 32px); text-align: center; white-space: pre-line; }
         @keyframes slideDown { from { opacity: 0; transform: translateX(-50%) translateY(-20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
         .notepad-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: transparent; z-index: 100005; display: flex; align-items: center; justify-content: center; }
-        .notepad-modal-content { background: var(--rm-bg-main); backdrop-filter: blur(20px); padding: 24px; border-radius: 12px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.6); max-width: 350px; width: 90%; border: 1px solid var(--rm-border); color: var(--rm-text-main); }
+        .notepad-modal-content { background: var(--rm-bg-main); padding: 24px; border-radius: 12px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.6); max-width: 350px; width: 90%; border: 1px solid var(--rm-border); color: var(--rm-text-main); }
         .notepad-modal-message { color: var(--rm-text-main); margin-bottom: 20px; line-height: 1.6; white-space: pre-wrap; font-weight: 500; }
         .notepad-modal-input { width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--rm-border); background: var(--rm-btn-bg); color: var(--rm-text-main); font-size: 14px; outline: none; margin-bottom: 16px; }
         .notepad-modal-buttons { display: flex; justify-content: center; gap: 12px; }
@@ -605,6 +605,17 @@ function applyWindowLayout() {
     });
 }
 
+// Chrome 계열에서 한 번 숨겼다 다시 표시한 플러그인 iframe이 화면을 새로 그리지 않아
+// 창이 안 보이는(배경만 어두운) 경우가 있다. 크기가 바뀌면 그제야 그려진다.
+// 연 직후 몇 번 창의 투명도를 살짝 바꿔 다시 그리게 한다 (display를 건드리면 입력 포커스가 풀리므로 쓰지 않는다).
+function forceRepaint() {
+    const el = document.getElementById(NOTEPAD_UI_ID);
+    if (!el || !isWindowVisible) return;
+    el.style.opacity = "0.999";
+    void el.offsetHeight;
+    setTimeout(() => { el.style.opacity = ""; }, 30);
+}
+
 // resize 이벤트가 늦거나 오지 않는 환경 대비: 연 직후 2초 동안 화면 크기가 바뀌는지 확인해 다시 계산한다
 function watchViewportAfterOpen() {
     let last = `${window.innerWidth}x${window.innerHeight}`, ticks = 0;
@@ -623,6 +634,7 @@ async function openNotepadWindow() {
     // 이후 화면 크기가 실제 값으로 바뀌면 resize 이벤트에서 다시 계산된다
     applyWindowLayout();
     watchViewportAfterOpen();
+    for (const delay of [0, 100, 400]) setTimeout(forceRepaint, delay);
     setTimeout(focusActiveTab, 50);
     if (pendingToasts.length) showToast(pendingToasts.splice(0).join("\n"));
     if (pendingLegacyRestore) { pendingLegacyRestore = false; await offerLegacyBackupRestore(); }
@@ -1819,6 +1831,6 @@ async function initNotepad() {
 await initNotepad();
 
 } catch (error) {
-    console.error(`[RisuMemo v4.0.0] 플러그인 초기화 오류:`, error);
+    console.error(`[RisuMemo v4.0.1] 플러그인 초기화 오류:`, error);
 }
 })();
